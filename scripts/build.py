@@ -47,7 +47,7 @@ TEST_TARGETS=['audio_decoder_unittests', 'common_audio_unittests', 'common_video
     'modules_tests', 'rtc_pc_unittests', 'system_wrappers_unittests', 'test_support_unittests']
 TEST_ARCH = 'x64'  # Tests run on simulator
 TEST_SCHEME = 'debug'
-TEST_SIMULATOR_DEVICE = 'iPhone X'
+TEST_SIMULATOR_DEVICE = 'iPhone 11 Pro'
 
 def gngen(arch, ssl_root, scheme):
   gn_args = '--args=\'target_os="ios" target_cpu="%s" is_component_build=false '\
