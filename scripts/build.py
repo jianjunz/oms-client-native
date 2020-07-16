@@ -19,6 +19,8 @@ import shutil
 import fileinput
 import re
 import distutils.dir_util
+import uuid
+from ios import sim_test_runner as test_runner
 
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)),'build','config','mac'))
 import sdk_info
@@ -42,12 +44,17 @@ FRAMEWORK_MODULE_MAP_PATH = os.path.join(HOME_PATH, 'talk', 'owt', 'sdk',
 SDK_TARGETS = ['owt_sdk_base', 'owt_sdk_p2p', 'owt_sdk_conf', 'owt_sdk_objc', 'owt_deps']
 APP_TARGETS = ['AppRTCMobile']
 WEBRTC_FRAMEWORK_NAME = 'WebRTC.framework'
-# common_video_unittests and modules_unittests are not enabled because some failure cases.
-TEST_TARGETS=['audio_decoder_unittests', 'common_audio_unittests', 'common_video_unittests',
-    'modules_tests', 'rtc_pc_unittests', 'system_wrappers_unittests', 'test_support_unittests']
+# TODO: xctests (sdk_unittests and sdk_framework_unittests) are not enabled. video_engine_tests is disabled because of failure.
+TEST_TARGETS = ['audio_decoder_unittests',
+                'common_audio_unittests', 'common_video_unittests', 'modules_tests',
+                'rtc_media_unittests',  'rtc_pc_unittests', 'rtc_stats_unittests',
+                'rtc_unittests', 'system_wrappers_unittests', 'test_support_unittests',
+                'tools_unittests', 'video_capture_tests',
+                'voip_unittests', 'webrtc_nonparallel_tests']
 TEST_ARCH = 'x64'  # Tests run on simulator
 TEST_SCHEME = 'debug'
 TEST_SIMULATOR_DEVICE = 'iPhone X'
+TEST_IOS_VER = '13.5'
 
 def gngen(arch, ssl_root, scheme):
   gn_args = 'target_os="ios" target_cpu="%s" is_component_build=false '\
@@ -146,15 +153,17 @@ def getsdkversion():
   return settings['sdk_version']
 
 # Run unit tests on simulator. Return True if all tests are passed.
-def runtest(ssl_root):
-  print 'Start running unit tests.'
+# Test reports are written to tests/<test ID> directory of SDK output directory.
+def runtest():
+  test_id = uuid.uuid4()
+  print('Start running unit tests, ID: ' + str(test_id))
   # Build app targets checks link issue.
   if not ninjabuild(TEST_ARCH, TEST_SCHEME, SDK_TARGETS + APP_TARGETS + TEST_TARGETS):
     return False
+  runner = test_runner.TestRunner(getoutputpath(TEST_ARCH, TEST_SCHEME), TEST_SIMULATOR_DEVICE, TEST_IOS_VER, os.path.join(
+      getoutputpath(TEST_ARCH, TEST_SCHEME), 'tests', str(test_id)))
   for test_target in TEST_TARGETS:
-    if subprocess.call(['./iossim', '-d', TEST_SIMULATOR_DEVICE, '-s',
-        getsdkversion(), '%s.app'%test_target],
-        cwd=getoutputpath(TEST_ARCH, TEST_SCHEME)):
+    if runner.run(os.path.join(getoutputpath(TEST_ARCH, TEST_SCHEME), test_target+'.app')):
       return False
   return True
 
@@ -180,6 +189,8 @@ def main():
   if not opts.scheme in SCHEME_DICT:
     print >> sys.stderr, ("Invalid scheme name.")
     return 1
+  if opts.ssl_root and not opts.skip_tests:
+    print >> sys.stderr, ("Build tests with OpenSSL is not supported.")
   for arch_item in opts.arch:
     if not arch_item in ARCH_PARAM_DICT:
       print >> sys.stderr, ("Invalid arch value.")
@@ -195,7 +206,7 @@ def main():
     if not opts.skip_gn_gen:
       if not gngen(TEST_ARCH, opts.ssl_root, TEST_SCHEME):
         return 1
-    if not runtest(opts.ssl_root):
+    if not runtest():
       return 1
   print 'Done.'
   return 0
